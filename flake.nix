@@ -10,6 +10,10 @@
       url = "github:CompVis/stable-diffusion?rev=69ae4b35e0a0f6ee1af8bb9a5d0016ccb27e36dc";
       flake = false;
     };
+    #codeformer-repo = {
+    #  url = "github:sczhou/CodeFormer?rev=c5b4593074ba6214284d6acd5f1719b6c5d739af";
+    #  flake = false;
+    #};
   };
   outputs = { self, nixpkgs, nixlib, stable-diffusion-repo }@inputs:
     let
@@ -43,6 +47,7 @@
         font-roboto
         piexif
         websockets
+        codeformer
 
         albumentations
         opencv4
@@ -107,6 +112,7 @@
           basicsr = rmCallPackage ./packages/basicsr { opencv-python = self.opencv4; };
           facexlib = rmCallPackage ./packages/facexlib { opencv-python = self.opencv4; };
           realesrgan = rmCallPackage ./packages/realesrgan { opencv-python = self.opencv4; };
+          codeformer = callPackage ./packages/codeformer { opencv-python = self.opencv4; };
           filterpy = callPackage ./packages/filterpy { };
           kornia = callPackage ./packages/kornia { };
           lpips = callPackage ./packages/lpips { };
@@ -174,8 +180,17 @@
             (let
               lapack = nixpkgs_.lapack.override { lapackProvider = nixpkgs_.mkl; };
               blas = nixpkgs_.lapack.override { lapackProvider = nixpkgs_.mkl; };
+              submodel = pkg: nixpkgs_.python3.pkgs.${pkg} + "/lib/python3.10/site-packages";
+              taming-transformers = submodel "taming-transformers-rom1504";
+              k_diffusion = submodel "k-diffusion";
+              codeformer = (submodel "codeformer") + "/codeformer";
             in
             {
+              postPatch = ''
+                echo Hellos
+
+              '';
+              passthru.nixpkgs_ = nixpkgs_;
               name = "diffusion-amd";
               propagatedBuildInputs = requirements nixpkgs_;
               shellHook = ''
@@ -185,9 +200,15 @@
                 export NIXPKGS_ALLOW_UNFREE=1
                 export LD_LIBRARY_PATH=${lapack}/lib:${blas}/lib
                 cd stable-diffusion-webui
+                git reset --hard HEAD
                 rm -rf repositories/
                 mkdir repositories
                 ln -s ${inputs.stable-diffusion-repo}/ repositories/stable-diffusion
+                substituteInPlace modules/paths.py \
+                  --subst-var-by taming_transformers ${taming-transformers} \
+                  --subst-var-by k_diffusion ${k_diffusion} \
+                  --subst-var-by codeformer ${codeformer} \
+                  #--subst-var-by blip TODO
               '';
             });
             default = diffusion-amd;
