@@ -1,6 +1,6 @@
 [submodule "InvokeAI"]
 	path = InvokeAI
-	url = https://github.com/invoke-ai/InvokeAI
+	url = ../../invoke-ai/InvokeAI
 	branch = main
 [submodule "InvokeAI"]
      path = InvokeAI
@@ -10,4 +10,4 @@
      path = stable-diffusion-webui
      url = ../../AUTOMATIC1111/stable-diffusion-webui
 	path = stable-diffusion-webui
-	url = git@github.com:AUTOMATIC1111/stable-diffusion-webui.git
+	url = ../../AUTOMATIC1111/stable-diffusion-webui
