@@ -44,6 +44,7 @@
         piexif
         websockets
         codeformer
+        blip
 
         albumentations
         opencv4
@@ -120,6 +121,9 @@
           markdown-it-py = callPackage ./packages/markdown-it-py { };
           gradio = callPackage ./packages/gradio { };
           hatch-requirements-txt = callPackage ./packages/hatch-requirements-txt { };
+          timm = callPackage ./packages/timm { };
+          blip = callPackage ./packages/blip { };
+          fairscale = callPackage ./packages/fairscale { };
           torch-fidelity = callPackage ./packages/torch-fidelity { };
           resize-right = callPackage ./packages/resize-right { };
           torchdiffeq = callPackage ./packages/torchdiffeq { };
@@ -162,10 +166,20 @@
                   python3 = prev.python3.override {
                     packageOverrides =
                       python-self: python-super:
+                      {
+                        transformers = python-super.transformers.overrideAttrs( _: {
+                          src = prev.pkgs.fetchFromGitHub {
+                            owner = "huggingface";
+                            repo = "transformers";
+                            rev = "refs/tags/v4.19.2";
+                            hash = "sha256-9r/1vW7Rhv9+Swxdzu5PTnlQlT8ofJeZamHf5X4ql8w=";
+                          };
+                        });
+                      } //
                       (overlay_default prev python-super) //
                       (overlay_amd prev python-super) //
                       (overlay_pynixify python-self);
-                      #((import ./pynixify/overlay.nix) python-self python-super);
+                    #((import ./pynixify/overlay.nix) python-self python-super);
                   };
                 })
               ];
@@ -173,40 +187,43 @@
           in
           rec {
             diffusion-amd = nixpkgs_.mkShell
-            (let
-              lapack = nixpkgs_.lapack.override { lapackProvider = nixpkgs_.mkl; };
-              blas = nixpkgs_.lapack.override { lapackProvider = nixpkgs_.mkl; };
-              submodel = pkg: nixpkgs_.python3.pkgs.${pkg} + "/lib/python3.10/site-packages";
-              taming-transformers = submodel "taming-transformers-rom1504";
-              k_diffusion = submodel "k-diffusion";
-              codeformer = (submodel "codeformer") + "/codeformer";
-            in
-            {
-              postPatch = ''
-                echo Hellos
+              (
+                let
+                  lapack = nixpkgs_.lapack.override { lapackProvider = nixpkgs_.mkl; };
+                  blas = nixpkgs_.lapack.override { lapackProvider = nixpkgs_.mkl; };
+                  submodel = pkg: nixpkgs_.python3.pkgs.${pkg} + "/lib/python3.10/site-packages";
+                  taming-transformers = submodel "taming-transformers-rom1504";
+                  k_diffusion = submodel "k-diffusion";
+                  codeformer = (submodel "codeformer") + "/codeformer";
+                  blip = (submodel "blip") + "/blip";
+                in
+                {
+                  postPatch = ''
+                    echo Hellos
 
-              '';
-              passthru.nixpkgs_ = nixpkgs_;
-              name = "diffusion-amd";
-              propagatedBuildInputs = requirements nixpkgs_;
-              shellHook = ''
-                #on my machine SD segfaults somewhere inside scipy with openblas, so I had to use another blas impl
-                #build of scipy with non-default blas is broken, therefore overriding lib in runtime
+                  '';
+                  passthru.nixpkgs_ = nixpkgs_;
+                  name = "diffusion-amd";
+                  propagatedBuildInputs = requirements nixpkgs_;
+                  shellHook = ''
+                    #on my machine SD segfaults somewhere inside scipy with openblas, so I had to use another blas impl
+                    #build of scipy with non-default blas is broken, therefore overriding lib in runtime
 
-                export NIXPKGS_ALLOW_UNFREE=1
-                export LD_LIBRARY_PATH=${lapack}/lib:${blas}/lib
-                cd stable-diffusion-webui
-                git reset --hard HEAD
-                rm -rf repositories/
-                mkdir repositories
-                ln -s ${inputs.stable-diffusion-repo}/ repositories/stable-diffusion
-                substituteInPlace modules/paths.py \
-                  --subst-var-by taming_transformers ${taming-transformers} \
-                  --subst-var-by k_diffusion ${k_diffusion} \
-                  --subst-var-by codeformer ${codeformer} \
-                  #--subst-var-by blip TODO
-              '';
-            });
+                    export NIXPKGS_ALLOW_UNFREE=1
+                    export LD_LIBRARY_PATH=${lapack}/lib:${blas}/lib
+                    cd stable-diffusion-webui
+                    git reset --hard HEAD
+                    rm -rf repositories/
+                    mkdir repositories
+                    ln -s ${inputs.stable-diffusion-repo}/ repositories/stable-diffusion
+                    substituteInPlace modules/paths.py \
+                      --subst-var-by taming_transformers ${taming-transformers} \
+                      --subst-var-by k_diffusion ${k_diffusion} \
+                      --subst-var-by codeformer ${codeformer} \
+                      --subst-var-by blip ${blip}
+                  '';
+                }
+              );
             default = diffusion-amd;
           });
     };
